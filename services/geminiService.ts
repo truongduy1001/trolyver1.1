@@ -1,23 +1,35 @@
-
 import { GoogleGenAI } from "@google/genai";
 import type { SpellCheckResult, ContractDetails, LegalEvaluationResult, ComparisonResult, OcrResult } from '../types';
 import { readFileContent } from '../utils/fileReader';
 
 /**
  * Khởi tạo instance AI. 
- * API Key được lấy trực tiếp từ process.env.API_KEY theo quy định.
+ * Trên Vercel, biến môi trường có thể được truy cập qua process.env.API_KEY
  */
-const getAiClient = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
+const getAiClient = () => {
+  const apiKey = (import.meta as any).env?.VITE_API_KEY || process.env.API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing API_KEY. Hãy kiểm tra Environment Variables trên Vercel.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 const parseJsonFromAi = (text: string | undefined) => {
   if (!text) throw new Error("AI không trả về kết quả.");
   let cleanText = text.trim();
-  if (cleanText.startsWith("```json")) {
-    cleanText = cleanText.replace(/^```json/, "").replace(/```$/, "").trim();
-  } else if (cleanText.startsWith("```")) {
-    cleanText = cleanText.replace(/^```/, "").replace(/```$/, "").trim();
+  
+  // Loại bỏ các khối code markdown if any
+  const jsonMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (jsonMatch) {
+    cleanText = jsonMatch[1].trim();
   }
-  return JSON.parse(cleanText);
+
+  try {
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error("JSON Parse Error:", cleanText);
+    throw new Error("Dữ liệu AI trả về không đúng định dạng JSON.");
+  }
 };
 
 export const checkVietnameseSpelling = async (file: File, contractName: string): Promise<SpellCheckResult> => {
